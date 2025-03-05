@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assessment Score Tracker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f2f2f2;
+        }
+        .download-btn {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: blue;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+        .sortable-list {
+            display: inline-block;
+            list-style: none;
+            padding: 10px;
+            background: #f7f7f7;
+            width: 300px;
+            border: 1px solid #ddd;
+            text-align: left;
+            cursor: grab;
+        }
+        .sortable-list li {
+            padding: 8px;
+            background: white;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+        }
+        .sortable-list li input {
+            margin-right: 10px;
+        }
+        .sortable-list li:hover {
+            background: #e0e0e0;
+        }
+    </style>
+</head>
+<body>
+    <h2>Upload Score report for 2 mins "Assessment Scores"</h2>
+    <input type="file" id="fileInput" accept=".xls, .xlsx">
+    
+    <h3>Drag to Reorder Deployments & Select to Filter</h3>
+    <ul id="deploymentOrder" class="sortable-list"></ul>
+    <button onclick="applyDeploymentOrder()">Apply Order & Filter</button>
+    
+    <div id="tableContainer"></div>
+    <button id="downloadBtn" class="download-btn" onclick="downloadExcel()">Download Processed Excel</button>
+
+    <script>
+        let processedData = [];
+        let deploymentOrder = [];
+
+        document.getElementById("fileInput").addEventListener("change", function(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: "array" });
+                const sheetName = "Overall"; // Ensure correct sheet
+
+                if (!workbook.Sheets[sheetName]) {
+                    alert("Sheet 'Overall' not found! Please upload a correct file.");
+                    return;
+                }
+
+                const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+                processScores(jsonData);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        function processScores(data) {
+            if (data.length < 2) {
+                alert("Invalid sheet format!");
+                return;
+            }
+
+            let headers = data[0].map(h => h ? h.toString().trim().toLowerCase() : ""); // Normalize headers
+            let rows = data.slice(1);
+
+            let nameIdx = headers.indexOf("name");
+            let emailIdx = headers.indexOf("email");
+            let deployDescIdx = headers.indexOf("deployment description");
+            let percentageIdx = headers.indexOf("percentage");
+
+            if (nameIdx === -1 || emailIdx === -1 || deployDescIdx === -1 || percentageIdx === -1) {
+                alert("Missing required columns. Please check your file.");
+                return;
+            }
+
+            let scoreTable = {};
+            let uniqueDeployments = new Set();
+
+            rows.forEach(row => {
+                let name = row[nameIdx]?.toString().trim() || "";
+                let email = row[emailIdx]?.toString().trim() || "";
+                let deployment = row[deployDescIdx]?.toString().trim() || "";
+                let percentage = parseInt(row[percentageIdx]) || 0;
+
+                let baseDeployment = deployment.replace(/\s*\|\s*Redeployment\s*$/, "");
+                let displayScore = percentage === 0 ? "Not Started" : percentage;
+
+                uniqueDeployments.add(baseDeployment);
+
+                let key = name + "|" + email;
+                if (!scoreTable[key]) {
+                    scoreTable[key] = { Name: name, Email: email };
+                }
+
+                if (!scoreTable[key][baseDeployment] || scoreTable[key][baseDeployment] === "Not Started" || scoreTable[key][baseDeployment] < displayScore) {
+                    scoreTable[key][baseDeployment] = displayScore;
+                }
+            });
+
+            deploymentOrder = [...uniqueDeployments];
+
+            document.getElementById("deploymentOrder").innerHTML = deploymentOrder.map(deploy =>
+                `<li data-value="${deploy}"><input type="checkbox" checked> ${deploy}</li>`).join("");
+
+
+            new Sortable(document.getElementById("deploymentOrder"), { animation: 150 });
+
+            processedData = Object.values(scoreTable);
+            displayTable(processedData);
+            document.getElementById("downloadBtn").style.display = "block";
+        }
+
+        function applyDeploymentOrder() {
+            let sortedList = document.getElementById("deploymentOrder").children;
+            deploymentOrder = Array.from(sortedList).map(item => ({
+                value: item.getAttribute("data-value"),
+                checked: item.querySelector("input").checked
+            })).filter(item => item.checked).map(item => item.value);
+            
+            displayTable(processedData);
+        }
+
+        function displayTable(data) {
+            if (data.length === 0) {
+                document.getElementById("tableContainer").innerHTML = "<p>No data to display.</p>";
+                return;
+            }
+
+            let tableHTML = "<table><thead><tr><th>Name</th><th>Email</th>";
+            deploymentOrder.forEach(deploy => tableHTML += `<th>${deploy}</th>`);
+            tableHTML += "</tr></thead><tbody>";
+
+            data.forEach(row => {
+                tableHTML += `<tr><td>${row.Name}</td><td>${row.Email}</td>`;
+                deploymentOrder.forEach(deploy => {
+                    let value = row[deploy] || "Not Started";
+                    let color = value === "Not Started" ? "background-color: #D3D3D3" :
+                                value >= 1 && value <= 69 ? "background-color: #FFC7CE" :
+                                value >= 70 && value <= 75 ? "background-color: #FFEB9C" :
+                                value > 75 ? "background-color: #C6EFCE" : "";
+
+                    tableHTML += `<td style="${color}">${value}</td>`;
+                });
+                tableHTML += "</tr>";
+            });
+
+            tableHTML += "</tbody></table>";
+            document.getElementById("tableContainer").innerHTML = tableHTML;
+        }
+
+        function downloadExcel() {
+            let ws = XLSX.utils.json_to_sheet(processedData.map(row => {
+                let orderedRow = { Name: row.Name, Email: row.Email };
+                deploymentOrder.forEach(deploy => orderedRow[deploy] = row[deploy] || "Not Started");
+                return orderedRow;
+            }));
+
+            let wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Assessment Scores");
+            XLSX.writeFile(wb, "Filtered_Assessment_Scores.xlsx");
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Program Ops</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@300..900&family=Cinzel:wght@400..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="ops.css">
+    <style>
+        /* Grid styling */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .grid-item {
+            padding: 15px;
+            text-align: center;
+            background-color: #f3f3f3;
+            border: 1px solid #ccc;
+            text-decoration: none;
+            font-weight: bold;
+            color: black;
+            border-radius: 5px;
+        }
+        .grid-item:hover {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header Section -->
+    <div class="headerline">
+        <img class="header" src="images/image (9).png" alt="Logo">
+        <div class="dropdown">
+            <button class="Programbutton" onclick="toggleDropdown()">Programs &raquo;</button>
+            <div class="dropdown-content" id="dropdown-menu">
+                <a href="#" onclick="fetchProgramData('Cohort 1')">Cohort 1</a>
+                <a href="#" onclick="fetchProgramData('Cohort 4')">Cohort 4</a>
+                <a href="#" onclick="fetchProgramData('DA Batch')">DA Batch</a>
+                <a href="#" onclick="fetchProgramData('Snowpro Dec')">Snowpro Dec</a>
+                <a href="#" onclick="fetchProgramData('Databricks Jan')">Databricks Jan</a>
+            </div>
+        </div>
+        <button class="goto" onclick="location.href='ops.html';">Home</button>
+    </div>
+
+    <!-- Announcement Section -->
+    <div class="secondline">
+        <p class="second"> &#128266; We're excited to introduce Enqurious Operations for Team </p>
+    </div>
+
+    <!-- Content Section -->
+    <div class="content" id="program-content">Select a program to see details here.</div>
+
+    <!-- JavaScript -->
+    <script>
+        function toggleDropdown() {
+            var dropdown = document.getElementById("dropdown-menu");
+            dropdown.style.display = (dropdown.style.display === "block") ? "none" : "block";
+        }
+
+        function fetchProgramData(programName) {
+            fetch(`/api/getProgramData?program=${programName}`)
+                .then(response => response.json())
+                .then(data => {
+                    var content = document.getElementById("program-content");
+                    if (data.success) {
+                        var details = `<div class="grid-container">`;
+                        for (var key in data.programDetails) {
+                            details += `<div class="grid-item">${key}: ${data.programDetails[key]}</div>`;
+                        }
+                        details += `</div>`;
+                        content.innerHTML = `<p><b>${programName}</b></p>${details}`;
+                    } else {
+                        content.innerHTML = `<p>No data available for <b>${programName}</b>.</p>`;
+                    }
+                })
+                .catch(error => console.error("Error fetching program data:", error));
+
+            // Hide dropdown after selection
+            document.getElementById("dropdown-menu").style.display = "none";
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Red Flags</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 50px;
+            position: relative;
+        }
+        h1 {
+            color: red;
+            text-align: center;
+        }
+        .upload-container {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .download-link {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 16px;
+            color: blue;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .download-link:hover {
+            text-decoration: underline;
+        }
+        .dropdown-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .menu {
+            display: inline-block;
+            position: relative;
+            background: #f1f1f1;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .menu-content {
+            display: none;
+            position: absolute;
+            background: white;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.2);
+            padding: 10px;
+            z-index: 1000;
+            min-width: 150px;
+        }
+        .menu:hover .menu-content {
+            display: block;
+        }
+        .menu-content select {
+            width: 100%;
+            padding: 5px;
+        }
+        .submit-btn {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        .submit-btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Red Flags</h1>
+    <div class="upload-container">
+        <input type="file" id="csvUpload" accept=".csv" onchange="handleFileUpload(event)">
+    </div>
+    <a class="download-link" id="csvDownload" href="#">Download Sample CSV</a>
+    <div class="dropdown-container" id="dropdownContainer"></div>
+    <button class="submit-btn" onclick="submitSelections()">Submit</button>
+    
+    <script>
+        let assessmentSelections = {};
+
+        function createCSV() {
+            const csvContent = `Name,Email,Partial Mock Test 1,Partial Mock Test 2,Overall Progress,Attendance\n`
+                + `John Doe,john.doe@example.com,85,78,90%,95%\n`
+                + `Jane Smith,jane.smith@example.com,78,60,85%,88%\n`
+                + `Alice Johnson,alice.johnson@example.com,92,80,95%,97%\n`;
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            return URL.createObjectURL(blob);
+        }
+
+        document.getElementById("csvDownload").href = createCSV();
+        document.getElementById("csvDownload").download = "sample_red_flags.csv";
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csvData = e.target.result;
+                const rows = csvData.split("\n");
+                if (rows.length < 2) return;
+                
+                const headers = rows[0].split(",");
+                const assessmentHeaders = headers.filter(h => h.includes("Partial Mock Test"));
+                generateDropdowns(assessmentHeaders);
+            };
+            reader.readAsText(file);
+        }
+        
+        function generateDropdowns(assessmentHeaders) {
+            const dropdownContainer = document.getElementById("dropdownContainer");
+            dropdownContainer.innerHTML = "";
+            
+            assessmentHeaders.forEach(header => {
+                const menuDiv = document.createElement("div");
+                menuDiv.className = "menu";
+                menuDiv.textContent = header;
+                
+                const menuContent = document.createElement("div");
+                menuContent.className = "menu-content";
+                
+                const select = document.createElement("select");
+                select.innerHTML = `
+                    <option value="not started">Not Started</option>
+                    <option value="20% and below">20% and Below</option>
+                    <option value="40% and below">40% and Below</option>
+                    <option value="60% and below">60% and Below</option>
+                    <option value="80% and below">80% and Below</option>
+                    <option value="Completed">Completed</option>
+                `;
+                select.onchange = function() { assessmentSelections[header] = select.value; };
+                
+                menuContent.appendChild(select);
+                menuDiv.appendChild(menuContent);
+                dropdownContainer.appendChild(menuDiv);
+            });
+        }
+        
+        function submitSelections() {
+            console.log("Submitted selections:", assessmentSelections);
+            alert("Selections submitted successfully!");
+        }
+    </script>
+</body>
+</html>
