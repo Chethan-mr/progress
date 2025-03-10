@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Ops</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .headerline {
+            margin-top: 20px;
+            margin-left: 300px;
+            justify-content: center;
+        }
+        .header {
+            width: 200px;
+            vertical-align: middle;
+        }
+        .secondline {
+            background-color: rgb(5, 150, 105);
+            color: white;
+            font-size: 20px;
+            text-align: center;
+            padding: 5px;
+            border-radius: 20px;
+        }
+        .main-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 30px;
+        }
+        .chart-container {
+            width: 40%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 400px; /* Fixed height to prevent movement */
+        }
+        .chart-container canvas {
+            width: 300px !important;
+            height: 300px !important;
+        }
+        .right-container {
+            width: 50%;
+        }
+        .table-container {
+            width: 100%;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid black;
+            padding: 8px;
+            text-align: left;
+        }
+        #downloadBtn, #announcementBtn {
+            margin-top: 10px;
+            padding: 10px;
+            background: blue;
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="headerline">
+        <button class="goto" onclick="location.href='ops.html';">Home</button>
+    </div>
+
+    <div class="secondline">
+        <p> 🎤 We're excited to introduce Enqurious Operations for Team </p>
+    </div>
+
+    <div class="main-container">
+        <div class="chart-container">
+            <h2>Upload CSV/Excel File</h2>
+            <input type="file" id="fileInput" accept=".csv, .xls, .xlsx">
+            <canvas id="progressChart"></canvas>
+        </div>
+
+        <div class="right-container">
+            <div class="table-container">
+                <h2>Selected Learners</h2>
+                <table id="learnerTable">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Progress (%)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr><td colspan="3">Upload a file and click a chart section</td></tr>
+                    </tbody>
+                </table>
+                <button id="downloadBtn" onclick="downloadCSV()">Download CSV</button>
+                <button id="announcementBtn" onclick="downloadAnnouncementCSV()">Download Announcement CSV</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let learners = [];
+        let currentLearners = [];
+        let progressChart = null;
+
+        document.getElementById("fileInput").addEventListener("change", function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const fileType = file.name.split('.').pop().toLowerCase();
+                if (fileType === "csv") readCSV(file);
+                else if (fileType === "xls" || fileType === "xlsx") readExcel(file);
+                else alert("Unsupported file format! Please upload a CSV or Excel file.");
+            }
+        });
+
+        function readCSV(file) {
+            const reader = new FileReader();
+            reader.onload = e => parseCSV(e.target.result);
+            reader.readAsText(file);
+        }
+
+        function readExcel(file) {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: "array" });
+                parseCSV(XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]));
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parseCSV(csv) {
+            learners = csv.split("\n").slice(1).map(row => {
+                const cols = row.split(",");
+                return { 
+                    name: cols[0], 
+                    email: cols[1], 
+                    percentage: parseInt(cols[10]) || 0,  
+                    deploymentDescription: cols[3] || "your course" 
+                };
+            });
+            updatePieChart();
+        }
+
+        function updatePieChart() {
+            const counts = [
+                learners.filter(l => l.percentage === 0).length,
+                learners.filter(l => l.percentage > 0 && l.percentage < 100).length,
+                learners.filter(l => l.percentage === 100).length
+            ];
+
+            const ctx = document.getElementById("progressChart").getContext("2d");
+            if (!progressChart) {
+                progressChart = new Chart(ctx, {
+                    type: "pie",
+                    data: {
+                        labels: ["Not Started", "In Progress", "Completed"],
+                        datasets: [{ data: counts, backgroundColor: ["red", "yellow", "green"] }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,  /* Fixed aspect ratio */
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) displayLearners(elements[0].index);
+                        }
+                    }
+                });
+            } else {
+                progressChart.data.datasets[0].data = counts;
+                progressChart.update();
+            }
+        }
+
+        function displayLearners(categoryIndex) {
+            let selectedLearners = [];
+            if (categoryIndex === 0) selectedLearners = learners.filter(l => l.percentage === 0);
+            else if (categoryIndex === 1) selectedLearners = learners.filter(l => l.percentage > 0 && l.percentage < 100);
+            else if (categoryIndex === 2) selectedLearners = learners.filter(l => l.percentage === 100);
+
+            currentLearners = selectedLearners;
+            const tableBody = document.getElementById("tableBody");
+            tableBody.innerHTML = selectedLearners.length === 0 
+                ? "<tr><td colspan='3'>No learners in this category</td></tr>"
+                : selectedLearners.map(l => `<tr><td>${l.name}</td><td>${l.email}</td><td>${l.percentage}%</td></tr>`).join("");
+
+            document.getElementById("downloadBtn").style.display = selectedLearners.length > 0 ? "block" : "none";
+            document.getElementById("announcementBtn").style.display = selectedLearners.length > 0 ? "block" : "none";
+        }
+
+        function downloadAnnouncementCSV() {
+            const notStarted = learners.filter(l => l.percentage === 0);
+            if (!notStarted.length) return alert("No learners with progress 0.");
+
+            const link = prompt("Enter the journey link:");
+            if (!link) return alert("Journey link is required.");
+
+            let csvContent = "data:text/csv;charset=utf-8,Email,Message from Team Enqurious,Click below to begin your journey:\n";
+            notStarted.forEach(l => {
+                const message = `Hope you're doing well!
+Just a gentle nudge to remind you that your learning journey is waiting for you. We noticed that you haven’t started ${l.deploymentDescription}, and we want to encourage you to take the first step.`;
+                csvContent += `${l.email},"${message}","Click here: ${link}"\n`;
+            });
+
+            triggerDownload(csvContent, "announcement_learners.csv");
+        }
+
+        function triggerDownload(content, filename) {
+            const encodedUri = encodeURI(content);
+            const link = document.createElement("a");
+            link.href = encodedUri;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>

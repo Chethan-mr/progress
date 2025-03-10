@@ -66,7 +66,7 @@
     
     <h3>Drag to Reorder Deployments & Select to Filter</h3>
     <ul id="deploymentOrder" class="sortable-list"></ul>
-    <button onclick="applyDeploymentOrder()">Apply Order & Filter</button>
+    <button id="deploymentOrder"onclick="applyDeploymentOrder()">Apply Order & Filter</button>
     
     <div id="tableContainer"></div>
     <button id="downloadBtn" class="download-btn" onclick="downloadExcel()">Download Processed Excel</button>
@@ -172,13 +172,14 @@
 
             let tableHTML = "<table><thead><tr><th>Name</th><th>Email</th>";
             deploymentOrder.forEach(deploy => tableHTML += `<th>${deploy}</th>`);
-            tableHTML += "</tr></thead><tbody>";
+            tableHTML += "<th>Overall Progress (%)</th></tr></thead><tbody>";
 
             data.forEach(row => {
                 tableHTML += `<tr><td>${row.Name}</td><td>${row.Email}</td>`;
                 deploymentOrder.forEach(deploy => {
                     let value = row[deploy] || 0;
                     let color = "";
+                    
 
                     if (value === 0) {
                         color = "background-color: #FFC7CE"; // Red

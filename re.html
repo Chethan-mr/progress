@@ -118,22 +118,22 @@ th {
 
 /* Class for not started scores */
 .not-started {
-    background-color: rgb(196, 191, 191); /* Light grey background */
+    background-color: var(--light-grey); /* Light grey background */
 }
 
 /* Class for scores below 70% */
 .below-70 {
-    background-color: #FFC7CE; /* Red background */
+    background-color: var(--red); /* Red background */
 }
 
 /* Class for scores below 75% */
 .below-75 {
-    background-color: #FFEB9C; /* Red background */
+    background-color: var(--red); /* Red background */
 }
 
 /* Class for scores above 75% */
 .above-75 {
-    background-color: #C6EFCE; /* Green background */
+    background-color: var(--green); /* Green background */
 }
 
     </style>
@@ -143,7 +143,7 @@ th {
     <div class="drawer" id="drawer">
         <h3>Assessment Configuration</h3>
         <ul id="deploymentOrder" class="sortable-list"></ul>
-        <button class ="download-btn"onclick="applyDeploymentOrder()">Apply Settings</button>
+        <button class =""onclick="applyDeploymentOrder()">Apply Settings</button>
     </div>
     <button class="drawer-toggle" onclick="toggleDrawer()">
         <svg class="hamburger-icon" viewBox="0 0 24 24">
@@ -167,140 +167,133 @@ th {
     <script>
         let processedData = [];
         let deploymentOrder = [];
-
+    
         function toggleDrawer() {
             const drawer = document.getElementById('drawer');
             const overlay = document.querySelector('.overlay');
             drawer.classList.toggle('open');
             overlay.classList.toggle('show');
         }
-
+    
         document.getElementById("fileInput").addEventListener("change", function(event) {
             const file = event.target.files[0];
             if (!file) return;
-
+    
             const reader = new FileReader();
             reader.onload = function(e) {
                 const data = new Uint8Array(e.target.result);
                 const workbook = XLSX.read(data, { type: "array" });
-                const sheetName = "Overall";
-
+                const sheetName = workbook.SheetNames[0];
+    
                 if (!workbook.Sheets[sheetName]) {
-                    alert("Sheet 'Overall' not found! Please upload a correct file.");
+                    alert("Sheet not found in the workbook!");
                     return;
                 }
-
+    
                 const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
                 processScores(jsonData);
             };
             reader.readAsArrayBuffer(file);
         });
-
+    
         function processScores(data) {
             if (data.length < 2) {
                 alert("Invalid sheet format!");
                 return;
             }
-
+    
             let headers = data[0].map(h => h ? h.toString().trim().toLowerCase() : "");
             let rows = data.slice(1);
-
+    
             let nameIdx = headers.indexOf("name");
             let emailIdx = headers.indexOf("email");
             let deployDescIdx = headers.indexOf("deployment description");
             let percentageIdx = headers.indexOf("percentage");
-
+    
             if (nameIdx === -1 || emailIdx === -1 || deployDescIdx === -1 || percentageIdx === -1) {
                 alert("Missing required columns. Please check your file.");
                 return;
             }
-
+    
             let scoreTable = {};
             let uniqueDeployments = new Set();
-
+    
             rows.forEach(row => {
                 let name = row[nameIdx]?.toString().trim() || "";
                 let email = row[emailIdx]?.toString().trim() || "";
                 let deployment = row[deployDescIdx]?.toString().trim() || "";
                 let percentage = parseInt(row[percentageIdx]) || 0;
-
+    
                 let baseDeployment = deployment.replace(/\s*\|\s*Redeployment\s*$/, "");
-                let displayScore = percentage === 0 ? "Not Started" : percentage;
-
                 uniqueDeployments.add(baseDeployment);
-
+    
                 let key = name + "|" + email;
                 if (!scoreTable[key]) {
-                    scoreTable[key] = { Name: name, Email: email };
+                    scoreTable[key] = { Name: name, Email: email, Scores: [], OverallProgress: 0 };
                 }
-
-                if (!scoreTable[key][baseDeployment] || scoreTable[key][baseDeployment] === "Not Started" || scoreTable[key][baseDeployment] < displayScore) {
-                    scoreTable[key][baseDeployment] = displayScore;
-                }
+                scoreTable[key].Scores.push(percentage);
             });
-
+    
+            // Calculate the average progress for each learner
+            Object.values(scoreTable).forEach(learner => {
+                const total = learner.Scores.reduce((acc, cur) => acc + cur, 0);
+                const average = total / learner.Scores.length;
+                learner.OverallProgress = Math.round(average);
+            });
+    
             deploymentOrder = [...uniqueDeployments];
-
+    
             document.getElementById("deploymentOrder").innerHTML = deploymentOrder.map(deploy =>
                 `<li data-value="${deploy}"><input type="checkbox" checked> ${deploy}</li>`).join("");
-
+    
             new Sortable(document.getElementById("deploymentOrder"), { animation: 150 });
-
+    
             processedData = Object.values(scoreTable);
             displayTable(processedData);
             document.getElementById("downloadBtn").style.display = "block";
         }
-
-        function applyDeploymentOrder() {
-            let sortedList = document.getElementById("deploymentOrder").children;
-            deploymentOrder = Array.from(sortedList).map(item => ({
-                value: item.getAttribute("data-value"),
-                checked: item.querySelector("input").checked
-            })).filter(item => item.checked).map(item => item.value);
-            
-            displayTable(processedData);
-        }
-
+    
         function displayTable(data) {
-    if (data.length === 0) {
-        document.getElementById("tableContainer").innerHTML = "<p>No data to display.</p>";
-        return;
-    }
-
-    let tableHTML = "<table><thead><tr><th>Name</th><th>Email</th>";
-    deploymentOrder.forEach(deploy => tableHTML += `<th>${deploy}</th>`);
-    tableHTML += "</tr></thead><tbody>";
-
-    data.forEach(row => {
-        tableHTML += `<tr><td>${row.Name}</td><td>${row.Email}</td>`;
-        deploymentOrder.forEach(deploy => {
-            const score = row[deploy] || "Not Started";
-            let className = score === "Not Started" ? "not-started" : score < 70 ? "below-70" : score < 75 ? "below-75" :score>75 ?"above-75" : "above-75";
-            tableHTML += `<td class="${className}" style="color: black;">${score}</td>`;
-        });
-        tableHTML += "</tr>";
-    });
-
-    tableHTML += "</tbody></table>";
-    document.getElementById("tableContainer").innerHTML = tableHTML;
-}
-
-
+            if (data.length === 0) {
+                document.getElementById("tableContainer").innerHTML = "<p>No data to display.</p>";
+                return;
+            }
+    
+            let tableHTML = "<table><thead><tr><th>Name</th><th>Email</th>";
+            deploymentOrder.forEach(deploy => tableHTML += `<th>${deploy}</th>`);
+            tableHTML += "<th>Overall Progress</th></tr></thead><tbody>";
+    
+            data.forEach(row => {
+                tableHTML += `<tr><td>${row.Name}</td><td>${row.Email}</td>`;
+                deploymentOrder.forEach(deploy => {
+                    const score = row.Scores.shift() || "Not Started";
+                    let className = score === "Not Started" ? "not-started" : score < 70 ? "below-70" : score < 75 ? "below-75" : "above-75";
+                    tableHTML += `<td class="${className}" style="color: black;">${score}</td>`;
+                });
+                tableHTML += `<td>${row.OverallProgress}%</td></tr>`;
+            });
+    
+            tableHTML += "</tbody></table>";
+            document.getElementById("tableContainer").innerHTML = tableHTML;
+        }
+    
         function downloadExcel() {
             const wsData = [
-                ["Name", "Email", ...deploymentOrder],
+                ["Name", "Email", ...deploymentOrder, "Overall Progress"],
                 ...processedData.map(row => [
                     row.Name,
                     row.Email,
-                    ...deploymentOrder.map(deploy => row[deploy] || "Not Started")
+                    ...row.Scores,
+                    row.OverallProgress
                 ])
             ];
-
+    
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(wsData);
             XLSX.utils.book_append_sheet(wb, ws, "Processed Data");
             XLSX.writeFile(wb, "processed_scores.xlsx");
         }
     </script>
+    
 </body>
 </html>

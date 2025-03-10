@@ -10,23 +10,6 @@
         body {
             font-family: Arial, sans-serif;
         }
-        .headerline {
-            margin-top: 20px;
-            margin-left: 300px;
-            justify-content: center;
-        }
-        .header {
-            width: 200px;
-            vertical-align: middle;
-        }
-        .secondline {
-            background-color: rgb(5, 150, 105);
-            color: white;
-            font-size: 20px;
-            text-align: center;
-            padding: 5px;
-            border-radius: 20px;
-        }
         .main-container {
             display: flex;
             justify-content: space-between;
@@ -38,7 +21,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            height: 400px; /* Fixed height to prevent movement */
+            height: 400px;
         }
         .chart-container canvas {
             width: 300px !important;
@@ -60,50 +43,24 @@
             padding: 8px;
             text-align: left;
         }
-        #downloadBtn, #announcementBtn {
+        #downloadBtn {
             margin-top: 10px;
-            padding: 10px;
-            background: blue;
+            padding: 8px 16px;
+            background-color: #4CAF50;
             color: white;
             border: none;
-            cursor: pointer;
-            display: none;
-        }
-        .deployment-progress-container {
-            margin-top: 20px;
-        }
-        .deployment-progress {
-            display: flex;
-            justify-content: space-between;
-            margin: 10px 0;
-        }
-        .deployment-progress div {
-            width: 80px;
-            text-align: center;
-            padding: 5px;
+            border-radius: 4px;
             cursor: pointer;
         }
-        .red { background-color: red; color: white; }
-        .yellow { background-color: yellow; color: black; }
-        .green { background-color: green; color: white; }
     </style>
 </head>
 <body>
-    <div class="headerline">
-        <button class="goto" onclick="location.href='ops.html';">Home</button>
-    </div>
-
-    <div class="secondline">
-        <p> 🎤 We're excited to introduce Enqurious Operations for Team </p>
-    </div>
-
     <div class="main-container">
         <div class="chart-container">
             <h2>Upload CSV/Excel File</h2>
             <input type="file" id="fileInput" accept=".csv, .xls, .xlsx">
+            <h3>Overall Progress</h3>
             <canvas id="progressChart"></canvas>
-            <h3>Deployment Progress</h3>
-            <canvas id="deploymentProgressChart"></canvas>
         </div>
 
         <div class="right-container">
@@ -114,7 +71,7 @@
                         <tr>
                             <th>Name</th>
                             <th>Email</th>
-                            <th>Progress (%)</th>
+                            <th>Overall Progress (%)</th>
                         </tr>
                     </thead>
                     <tbody id="tableBody">
@@ -122,28 +79,14 @@
                     </tbody>
                 </table>
                 <button id="downloadBtn" onclick="downloadCSV()">Download CSV</button>
-                <button id="announcementBtn" onclick="downloadAnnouncementCSV()">Download Announcement CSV</button>
-            </div>
-
-            <div class="deployment-progress-container">
-                <h3>Filter by Deployment Description</h3>
-                <div id="deploymentProgressList"></div>
-                <h4>Filter by Progress</h4>
-                <div>
-                    <input type="checkbox" id="notStartedCheckbox"> Not Started (Red)
-                    <input type="checkbox" id="inProgressCheckbox"> In Progress (Yellow)
-                    <input type="checkbox" id="completedCheckbox"> Completed (Green)
-                </div>
             </div>
         </div>
     </div>
 
     <script>
-        let learners = [];
-        let currentLearners = [];
-        let deploymentDescriptions = [];
+        let learners = {};
+        let filteredLearners = [];
         let progressChart = null;
-        let deploymentProgressChart = null;
 
         document.getElementById("fileInput").addEventListener("change", function(event) {
             const file = event.target.files[0];
@@ -172,39 +115,66 @@
         }
 
         function parseCSV(csv) {
-            learners = csv.split("\n").slice(1).map(row => {
+            let rows = csv.split("\n").slice(1);
+            learners = {}; // Reset learners object
+            rows.forEach(row => {
                 const cols = row.split(",");
-                return { 
-                    name: cols[0], 
-                    email: cols[1], 
-                    percentage: parseInt(cols[10]) || 0,  
-                    deploymentDescription: cols[3] || "your course" 
-                };
+                const email = cols[1];
+                const percentage = parseInt(cols[2]) || 0;
+                if (!learners[email]) {
+                    learners[email] = {
+                        name: cols[0],
+                        email: email,
+                        percentages: []
+                    };
+                }
+                learners[email].percentages.push(percentage);
             });
 
-            deploymentDescriptions = [...new Set(learners.map(l => l.deploymentDescription))];
-            updateOverallPieChart();
-            updateDeploymentPieChart();
+            // Calculate average progress for each learner
+            Object.values(learners).forEach(learner => {
+                const total = learner.percentages.reduce((a, b) => a + b, 0);
+                const average = total / learner.percentages.length;
+                learner.averageProgress = Math.round(average);
+            });
+
+            updateProgressChart();
+            displayLearners(Object.values(learners));
         }
 
-        function updateOverallPieChart() {
-            const counts = [
-                learners.filter(l => l.percentage === 0).length,
-                learners.filter(l => l.percentage > 0 && l.percentage < 100).length,
-                learners.filter(l => l.percentage === 100).length
-            ];
+        function updateProgressChart() {
+            const progressLevels = {
+                notStarted: 0,
+                inProgress: 0,
+                completed: 0
+            };
 
+            Object.values(learners).forEach(learner => {
+                if (learner.averageProgress === 0) progressLevels.notStarted++;
+                else if (learner.averageProgress < 100) progressLevels.inProgress++;
+                else progressLevels.completed++;
+            });
+
+            const counts = [progressLevels.notStarted, progressLevels.inProgress, progressLevels.completed];
             const ctx = document.getElementById("progressChart").getContext("2d");
             if (!progressChart) {
                 progressChart = new Chart(ctx, {
-                    type: "pie",
+                    type: "doughnut",
                     data: {
                         labels: ["Not Started", "In Progress", "Completed"],
-                        datasets: [{ data: counts, backgroundColor: ["red", "yellow", "green"] }]
+                        datasets: [{
+                            data: counts,
+                            backgroundColor: ["red", "yellow", "green"]
+                        }]
                     },
                     options: {
                         responsive: true,
-                        maintainAspectRatio: true
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) {
+                                const segment = elements[0].index;
+                                filterByProgress(segment);
+                            }
+                        }
                     }
                 });
             } else {
@@ -213,97 +183,36 @@
             }
         }
 
-        function updateDeploymentPieChart() {
-            const progressCounts = deploymentDescriptions.map(deployment => {
-                const counts = [
-                    learners.filter(l => l.deploymentDescription === deployment && l.percentage === 0).length,
-                    learners.filter(l => l.deploymentDescription === deployment && l.percentage > 0 && l.percentage < 100).length,
-                    learners.filter(l => l.deploymentDescription === deployment && l.percentage === 100).length
-                ];
-                return { deployment, counts };
+        function filterByProgress(segment) {
+            filteredLearners = Object.values(learners).filter(learner => {
+                return (segment === 0 && learner.averageProgress === 0) ||
+                       (segment === 1 && learner.averageProgress > 0 && learner.averageProgress < 100) ||
+                       (segment === 2 && learner.averageProgress === 100);
             });
-
-            const ctx = document.getElementById("deploymentProgressChart").getContext("2d");
-            if (!deploymentProgressChart) {
-                deploymentProgressChart = new Chart(ctx, {
-                    type: "pie",
-                    data: {
-                        labels: deploymentDescriptions,
-                        datasets: progressCounts.map(progress => ({
-                            label: progress.deployment,
-                            data: progress.counts,
-                            backgroundColor: ["red", "yellow", "green"]
-                        }))
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: true
-                    }
-                });
-            } else {
-                deploymentProgressChart.data.labels = deploymentDescriptions;
-                deploymentProgressChart.data.datasets = progressCounts.map(progress => ({
-                    label: progress.deployment,
-                    data: progress.counts,
-                    backgroundColor: ["red", "yellow", "green"]
-                }));
-                deploymentProgressChart.update();
-            }
+            displayLearners(filteredLearners);
         }
 
         function displayLearners(selectedLearners) {
-            currentLearners = selectedLearners;
             const tableBody = document.getElementById("tableBody");
-            tableBody.innerHTML = selectedLearners.length === 0 
-                ? "<tr><td colspan='3'>No learners in this category</td></tr>"
-                : selectedLearners.map(l => 
-                    `<tr><td>${l.name}</td><td>${l.email}</td><td>${l.percentage}%</td></tr>`
-                ).join("");
-
-            document.getElementById("downloadBtn").style.display = selectedLearners.length > 0 ? "block" : "none";
-            document.getElementById("announcementBtn").style.display = selectedLearners.length > 0 ? "block" : "none";
-        }
-
-        function downloadAnnouncementCSV() {
-            const notStarted = learners.filter(l => l.percentage === 0);
-            if (!notStarted.length) return alert("No learners with progress 0.");
-
-            const link = prompt("Enter the journey link:");
-            if (!link) return alert("Journey link is required.");
-
-            let csvContent = "data:text/csv;charset=utf-8,Email,Message from Team Enqurious,Click below to begin your journey:\n";
-            notStarted.forEach(l => {
-                const message = `Hope you're doing well!
-Just a gentle nudge to remind you that your learning journey is waiting for you. We noticed that you haven’t started ${l.deploymentDescription}, and we want to encourage you to take the first step.`;
-                csvContent += `${l.email},"${message}","${link}"\n`;
-            });
-
-            triggerDownload(csvContent, "announcement_learners.csv");
-        }
-
-        function triggerDownload(content, filename) {
-            const encodedUri = encodeURI(content);
-            const link = document.createElement("a");
-            link.href = encodedUri;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            tableBody.innerHTML = selectedLearners.map(learner => 
+                `<tr><td>${learner.name}</td><td>${learner.email}</td><td>${learner.averageProgress}%</td></tr>`
+            ).join("");
         }
 
         function downloadCSV() {
-            const learnersData = currentLearners.map(l => {
-                return {
-                    Name: l.name,
-                    Email: l.email,
-                    Progress: `${l.percentage}%`,
-                    Deployment: l.deploymentDescription
-                };
-            });
-            const ws = XLSX.utils.json_to_sheet(learnersData);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, "Learner Data");
-            XLSX.writeFile(wb, "learners_data.csv");
+            const rows = [
+                ["Name", "Email", "Overall Progress (%)"],
+                ...filteredLearners.map(learner => [learner.name, learner.email, learner.averageProgress])
+            ];
+            
+            const csvContent = rows.map(e => e.join(",")).join("\n");
+            const blob = new Blob([csvContent], { type: "text/csv" });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "filtered_learners.csv";
+            a.click();
+            window.URL.revokeObjectURL(url);
         }
     </script>
 </body>
